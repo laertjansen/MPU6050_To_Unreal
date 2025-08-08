@@ -1,0 +1,70 @@
+// A small experiment sending data from an Arduino MPU6050 sensor to Unreal Engine.
+// Arduino Uno + MPU6050 sensor + wires
+
+#include <Wire.h>
+#include <MPU6050.h>
+
+MPU6050 mpu;
+
+float yaw = 0;
+unsigned long lastTime = 0;
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+
+  Serial.println("Initializing MPU6050...");
+  mpu.initialize();
+
+  if (mpu.testConnection()) {
+    Serial.println("MPU6050 connection successful");
+  } else {
+    Serial.println("MPU6050 connection failed");
+    while (1);
+  }
+
+  lastTime = millis();
+}
+
+void loop() {
+  int16_t ax, ay, az;
+  int16_t gx, gy, gz;
+
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+
+  float axg = ax / 16384.0;
+  float ayg = ay / 16384.0;
+  float azg = az / 16384.0;
+
+  float pitch = atan2(ayg, sqrt(axg * axg + azg * azg)) * 180.0 / PI;
+  float roll  = atan2(-axg, azg) * 180.0 / PI;
+
+  // Calculate delta time in seconds
+  unsigned long now = millis();
+  float dt = (now - lastTime) / 1000.0;
+  lastTime = now;
+
+  // Convert gz to degrees/sec (sensitivity is 131 LSB/deg/s for default range)
+  float gz_dps = gz / 131.0;
+
+  // Integrate to get yaw
+  yaw += gz_dps * dt;
+
+  // Wrap yaw to -180 to 180
+  if (yaw > 180) yaw -= 360;
+  if (yaw < -180) yaw += 360;
+
+  // Round to int for Unreal
+  int pitchInt = round(pitch);
+  int rollInt  = round(roll);
+  int yawInt   = round(yaw);
+
+  // Values for Unreal: pitch,roll,yaw
+  Serial.print(pitchInt);
+  Serial.print(",");
+  Serial.print(rollInt);
+  Serial.print(",");
+  Serial.println(yawInt);
+
+  delay(75);
+}
